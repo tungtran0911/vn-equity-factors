@@ -1,0 +1,111 @@
+{
+  "frozen_at": "2026-09-26T00:20:26+07:00",
+  "data_last_session": "2026-09-25",
+  "data_file_sha256": "a93764456e2562641407739710ea67571eb2b2b409bdd41210a9dc7ba628e7e2",
+  "history_formation_months": [
+    "2017-04-28",
+    "2026-07-31",
+    112
+  ],
+  "first_out_of_sample_formation_month": "2026-09",
+  "features": [
+    "momentum",
+    "momentum_extremity",
+    "one_month",
+    "ivol",
+    "beta",
+    "limit_up_days"
+  ],
+  "hypotheses": {
+    "H1": {
+      "statement": "limit-up days carry a negative price",
+      "test": "Fama-MacBeth slope on limit_up_days rank, all six features",
+      "sign": -1,
+      "in_sample_mean": -0.0118,
+      "power_if_in_sample_effect_is_true": [
+        {
+          "months": 12,
+          "expected_t": 0.84,
+          "power": 0.21
+        },
+        {
+          "months": 24,
+          "expected_t": 1.19,
+          "power": 0.33
+        },
+        {
+          "months": 36,
+          "expected_t": 1.46,
+          "power": 0.43
+        },
+        {
+          "months": 60,
+          "expected_t": 1.89,
+          "power": 0.6
+        }
+      ]
+    },
+    "H2": {
+      "statement": "one-month returns continue",
+      "test": "Fama-MacBeth slope on one_month rank, all six features",
+      "sign": 1,
+      "in_sample_mean": 0.01169,
+      "power_if_in_sample_effect_is_true": [
+        {
+          "months": 12,
+          "expected_t": 0.77,
+          "power": 0.19
+        },
+        {
+          "months": 24,
+          "expected_t": 1.08,
+          "power": 0.29
+        },
+        {
+          "months": 36,
+          "expected_t": 1.33,
+          "power": 0.38
+        },
+        {
+          "months": 60,
+          "expected_t": 1.71,
+          "power": 0.53
+        }
+      ]
+    }
+  },
+  "strategies": {
+    "primary_signs": {
+      "score": "rank(one_month) - rank(limit_up_days)",
+      "portfolio": "top quintile, equal weight, long only",
+      "benchmark": "equal-weighted scored universe",
+      "cost_round_trip": 0.004
+    },
+    "secondary_lgbm": {
+      "model_file": "lgbm_15l_100t.txt",
+      "model_sha256": "121e00133b0c69fb0297ecf528eb583352b044d59b63cf875a9448e16201e44d",
+      "params": {
+        "num_leaves": 15,
+        "n_estimators": 100
+      },
+      "fitted_on_formation_months": 112,
+      "portfolio": "top quintile, equal weight, long only",
+      "cost_round_trip": 0.004
+    }
+  },
+  "decision_rule": {
+    "primary_look_months": 60,
+    "one_sided_alpha": 0.05,
+    "interim_looks_months": [
+      12,
+      24,
+      36
+    ],
+    "interim_looks_are": "descriptive only; no hypothesis is accepted or rejected before the primary look"
+  },
+  "versions": {
+    "pandas": "2.2.2",
+    "numpy": "2.2.6",
+    "lightgbm": "4.5.0"
+  }
+}

@@ -117,3 +117,43 @@ def test_fama_macbeth_recovers_the_cross_sectional_slope():
     slopes = fama_macbeth(y, {"x": x})
     assert len(slopes) == 24
     assert slopes["x"].mean() == pytest.approx(2.0, abs=0.02)
+
+
+def test_splits_purge_one_month_and_survive_holiday_month_ends():
+    """January 2022's last session was the 28th (Tet). A date cut-off at the 31st
+    once dropped it from validation, silently widening the purge to two months."""
+    from factors.cross_section import CrossSection
+    from factors.walkforward import splits
+    ends = pd.DatetimeIndex(["2021-10-29", "2021-11-30", "2021-12-31", "2022-01-28",
+                             "2022-02-28", "2023-11-30", "2023-12-29", "2024-01-31"])
+    cs = CrossSection(dates=ends, eligible=None, raw={}, ranks={},
+                      hold=pd.DataFrame(index=ends))
+    s = splits(cs)
+    assert s["train"][-1] == pd.Timestamp("2021-11-30")
+    assert s["validation"][0] == pd.Timestamp("2022-01-28")
+    assert s["validation"][-1] == pd.Timestamp("2023-11-30")
+    assert s["test"][0] == pd.Timestamp("2024-01-31")
+    purged = {pd.Timestamp("2021-12-31"), pd.Timestamp("2023-12-29")}
+    assert not purged & set(s["train"].append(s["validation"]).append(s["test"]))
+
+
+def test_scoring_never_touches_a_pre_freeze_month():
+    from factors.score import oos_months
+    ends = pd.DatetimeIndex(["2026-07-31", "2026-08-31", "2026-09-30", "2026-10-30"])
+    assert list(oos_months(ends, "2026-09")) == [pd.Timestamp("2026-09-30"),
+                                                 pd.Timestamp("2026-10-30")]
+
+
+def test_ledger_only_grows_and_never_rewrites_a_recorded_month(tmp_path):
+    from factors.score import append_to_ledger
+    path = tmp_path / "ledger.csv"
+    idx = pd.DatetimeIndex(["2026-09-30", "2026-10-30"], name="formation")
+    first = pd.DataFrame({"x": [0.1234567890123456789, 0.2]}, index=idx)
+    assert append_to_ledger(path, first) == 2
+    before = path.read_bytes()
+    idx2 = pd.DatetimeIndex(["2026-10-30", "2026-11-30"], name="formation")
+    later = pd.DataFrame({"x": [9.9, 0.3]}, index=idx2)   # 2026-10 restated: ignored
+    assert append_to_ledger(path, later) == 1
+    after = path.read_bytes()
+    assert after.startswith(before)
+    assert len(after.splitlines()) == 4

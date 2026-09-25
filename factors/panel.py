@@ -40,8 +40,12 @@ class Panel:
     calendar: pd.DatetimeIndex
 
 
-def load() -> Panel:
+def load(end: str | None = None) -> Panel:
+    """HOSE-era panel through `end` (a date, inclusive), or through the last
+    downloaded session."""
     daily = pd.read_parquet(DAILY)
+    if end is not None:
+        daily = daily[daily["date"] <= pd.Timestamp(end)]
     profiles = pd.read_parquet(PROFILES)[["symbol", "listing_date"]]
     daily = daily.merge(profiles, on="symbol", how="left")
     daily = daily[daily["date"] > daily["listing_date"]]

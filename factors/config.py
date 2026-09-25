@@ -15,6 +15,11 @@ UNIVERSE = DATA / "universe.json"
 
 HISTORY_START = "01-01-2016"      # DD-MM-YYYY, the provider's format
 
+# Last session of the in-sample study. The models were frozen on this data
+# (factors.freeze); the studies stop here so that a later download reproduces the
+# published tables instead of mixing the out-of-sample months into them.
+IN_SAMPLE_END = "2026-09-25"
+
 # HOSE daily price limit is +/-7% of the reference (previous close). A larger daily
 # move on HOSE is impossible except on a listing's first day or after a long
 # suspension, so it marks history from another exchange (HNX +/-10%, UPCoM +/-15%)

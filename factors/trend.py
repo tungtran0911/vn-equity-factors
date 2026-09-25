@@ -13,6 +13,7 @@ import sys
 
 import pandas as pd
 
+from factors.config import IN_SAMPLE_END
 from factors.panel import load
 from factors.report import (cost_section, pct, quintile_section, subperiod_section,
                             summary_section)
@@ -85,7 +86,7 @@ def next_session_by_move(panel) -> None:
 
 
 def run() -> int:
-    panel = load()
+    panel = load(end=IN_SAMPLE_END)
     signals = trend_signals(panel)
     results = {}
 

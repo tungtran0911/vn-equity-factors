@@ -32,7 +32,8 @@ import sys
 import numpy as np
 import pandas as pd
 
-from factors.config import MARKET, RISK_FREE, RISK_FREE_GRID
+from factors import cross_section
+from factors.config import IN_SAMPLE_END, MARKET, RISK_FREE, RISK_FREE_GRID
 from factors.panel import load
 from factors.report import (cost_section, pct, quintile_section, subperiod_section,
                             summary_section)
@@ -136,26 +137,12 @@ def ceiling_section(panel, risk) -> None:
               f"| {pct(m)} | {t:+.2f} |")
 
 
-def _pct_rank(frame: pd.DataFrame) -> pd.DataFrame:
-    """Cross-sectional percentile rank in [0, 1], date by date."""
-    r = frame.rank(axis=1)
-    return r.sub(1).div(r.max(axis=1).sub(1), axis=0)
-
 
 def momentum_test(panel, trend, risk) -> None:
-    mom, mom_el = trend["momentum_12_1"]
-    rev, rev_el = trend["reversal_1m"]
-    dates = (risk["ivol"][0].index.intersection(mom.index)
-             .intersection(rev.index))
-    common = (mom_el.reindex(dates) & rev_el.reindex(dates)
-              & risk["ivol"][1].reindex(dates) & risk["beta_dimson"][1].reindex(dates))
-    raw = {"momentum": mom, "one_month": rev, "ivol": risk["ivol"][0],
-           "beta": risk["beta_dimson"][0], "limit_up_days": risk["ceiling_hits"][0]}
-    ranks = {k: _pct_rank(v.reindex(dates).where(common)) for k, v in raw.items()}
-    ranks["momentum_extremity"] = (ranks["momentum"] - 0.5).abs() * 2
-    hold = holding_returns(panel, dates, skip=1)
+    cs = cross_section.build(panel, trend, risk)
+    dates, common, raw, ranks, hold = cs.dates, cs.eligible, cs.raw, cs.ranks, cs.hold
 
-    labels = quintile_labels(hold, mom.reindex(dates), common)
+    labels = quintile_labels(hold, raw["momentum"], common)
     print("\n## Are the extreme momentum quintiles the volatile ones?\n")
     print("| | " + " | ".join(f"Q{k}" for k in Q) + " |")
     print("|---" * (N_QUANTILES + 1) + "|")
@@ -192,7 +179,7 @@ def momentum_test(panel, trend, risk) -> None:
 
     # Two thirds of stocks have no limit-up day and share one tied rank, so the
     # coefficient's "lowest to highest" span overstates the real contrast.
-    hits = raw["limit_up_days"].reindex(dates).where(common)
+    hits = raw["limit_up_days"].where(common)
     r0 = ranks["limit_up_days"].where(hits == 0).stack().mean()
     r3 = ranks["limit_up_days"].where(hits >= 3).stack().mean()
     coef, _ = newey_west(fits[-1]["limit_up_days"])
@@ -211,7 +198,7 @@ def momentum_test(panel, trend, risk) -> None:
 
 
 def run() -> int:
-    panel = load()
+    panel = load(end=IN_SAMPLE_END)
     risk = risk_signals(panel)
     trend = trend_signals(panel)
 

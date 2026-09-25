@@ -68,3 +68,31 @@ def capm_nw(y: pd.Series, x: pd.Series,
     xtx_inv = np.linalg.inv(X.T @ X)
     cov = xtx_inv @ s @ xtx_inv
     return float(coef[0]), float(coef[0] / np.sqrt(cov[0, 0])), float(coef[1])
+
+
+def deflated_sharpe(returns: pd.Series, trial_sharpes: list[float]
+                    ) -> tuple[float, float, float]:
+    """Deflated Sharpe ratio (Bailey and Lopez de Prado, 2014).
+
+    The best of N backtests has a positive expected Sharpe ratio even when every
+    strategy is worthless. The benchmark SR0 is that expected maximum, from the
+    dispersion of the trials' Sharpe ratios; the deflated ratio is the probability
+    that the selected strategy's true Sharpe exceeds it, given the sample length,
+    skewness and kurtosis of its returns. Sharpe ratios are per period.
+
+    Returns (sharpe, sr0, probability).
+    """
+    from statistics import NormalDist
+
+    x = pd.Series(returns).dropna()
+    t = len(x)
+    sr = x.mean() / x.std(ddof=1)
+    n = len(trial_sharpes)
+    emc = 0.5772156649  # Euler-Mascheroni constant
+    z = NormalDist()
+    sr0 = float(np.std(trial_sharpes, ddof=1)) * (
+        (1 - emc) * z.inv_cdf(1 - 1 / n) + emc * z.inv_cdf(1 - 1 / (n * np.e)))
+    skew, kurt = x.skew(), x.kurt() + 3  # pandas kurt is excess kurtosis
+    denom = np.sqrt(1 - skew * sr + (kurt - 1) / 4 * sr ** 2)
+    prob = z.cdf((sr - sr0) * np.sqrt(t - 1) / denom)
+    return float(sr), float(sr0), float(prob)

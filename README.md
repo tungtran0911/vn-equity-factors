@@ -25,6 +25,14 @@ days earns 0.69% a month less the following month than a stock with none, and th
 effect has the same sign and size before and after 2022. The one-month continuation
 survives the same controls (+1.17, t = +2.32).
 
+**Out of sample.** Split into train, validation and test years, a linear model fitted
+on 2017-2021 fails afterwards, because the prices of beta and volatility turn with
+the market. A gradient-boosted model ranks stocks better than chance in the test
+years (rank IC +0.048, t = +3.44) but earns nothing after costs. Both effects above
+were found with the whole history in view, so the test years are not unseen data for
+them. They were frozen on 2026-09-26 and pre-registered for a test on data after
+September 2026 only, decided at 60 months.
+
 The daily price limit is the common thread. It turns the largest daily gain -- the
 standard measure of lottery demand -- into a count of limit-up days, and the count is
 what prices. No long-only portfolio in this study beats the universe after costs;
@@ -347,7 +355,111 @@ The momentum quintiles explain the U-shape of 4.1. The extremes are the risky st
 Controlling for volatility and beta cuts the extremity coefficient from -0.52 to
 -0.22. It was never significant, and what remains of it is not.
 
-## 6. Interpretation
+## 6. Out of sample
+
+### 6.1 Train, validation, test
+
+How much of a model fitted on one period survives into the next? Formation months are
+split by calendar month, with one month left out at each boundary: the label of the
+last training month is the next month's return, which is the one-month signal of the
+first validation month.
+
+| Set | Formation months | Months |
+|---|---|---|
+| Train | 2017-04 to 2021-11 | 56 |
+| Validation | 2022-01 to 2023-11 | 23 |
+| Test | 2024-01 to 2026-07 | 31 |
+
+Three kinds of model score the same six characteristic ranks as 5.5:
+
+- **Linear.** Fama-MacBeth coefficients estimated on the training months; the score
+  is their weighted sum of ranks. Every weight is a theory's prediction, estimated.
+- **Signs.** Rank of the one-month return minus rank of limit-up days. Nothing is
+  estimated.
+- **LightGBM.** Gradient-boosted trees on the stacked training stock-months, target
+  the within-month rank of next month's return. Four settings (7 or 15 leaves, 100 or
+  300 trees).
+
+The model with the highest mean validation rank IC is selected before the test years
+are scored; all are reported. Rank IC is the monthly rank correlation between score
+and next month's return. The portfolio is the score's top quintile, equal-weighted,
+long only, measured against the equal-weighted universe of scored stocks, net of
+0.4% round trip on turnover. Per month (t):
+
+| Model | Validation IC | Validation, net | Test IC | Test IC > 0 | Test, gross | Test, net |
+|---|---|---|---|---|---|---|
+| Linear | -0.053 (-1.11) | -0.74 (-1.04) | -0.027 (-1.34) | 48% | +0.08 (+0.33) | -0.15 (-0.62) |
+| Signs | +0.020 (+0.42) | +0.13 (+0.20) | +0.067 (+3.19) | 71% | +0.71 (+2.85) | +0.40 (+1.60) |
+| LightGBM, 7 leaves, 100 trees | +0.025 (+0.80) | -0.24 (-0.50) | +0.056 (+4.13) | 81% | +0.38 (+2.38) | +0.14 (+0.85) |
+| LightGBM, 7 leaves, 300 trees | +0.028 (+0.91) | -0.41 (-0.85) | +0.043 (+3.40) | 77% | +0.12 (+0.69) | -0.15 (-0.91) |
+| LightGBM, 15 leaves, 100 trees (selected) | +0.032 (+1.03) | -0.04 (-0.10) | +0.048 (+3.44) | 77% | +0.19 (+1.19) | -0.08 (-0.46) |
+| LightGBM, 15 leaves, 300 trees | +0.024 (+0.78) | -0.38 (-0.84) | +0.034 (+2.56) | 71% | +0.04 (+0.18) | -0.25 (-1.21) |
+
+- **The linear model fails out of its window**, with a negative IC in both later
+  periods. Its training coefficients put a positive price on beta (+1.30) and
+  volatility (+0.70), the prices of the 2017-2021 rise; 2022 reversed them (5.6).
+  Estimating a price for a characteristic whose price follows the market is fitting
+  the regime.
+- **LightGBM ranks, but does not pay.** Every setting has a positive and significant
+  test IC. The selected one earns +0.19% a month gross in its top quintile, and
+  turnover costs take all of it. At either leaf count, 300 trees do worse than 100
+  on test IC and on net returns in both periods.
+- **Signs does best on test and was not selected.** Its test IC (+0.067) and net
+  return (+0.40% a month, t = +1.60) are the highest, but it is not clean evidence:
+  its two signals were chosen from the full sample, test years included.
+- **Validation cannot separate the models.** The selected model's validation Sharpe
+  ratio of net monthly returns is -0.02; the expected best of six worthless trials
+  with the same dispersion is 0.13; the deflated Sharpe ratio (Bailey and Lopez de
+  Prado, 2014) gives it a 25% probability of being real. Twenty-three months are too
+  few to choose between models whose ICs differ by 0.01.
+
+This is pseudo out-of-sample. The parameters never saw the test years; the design
+did.
+
+### 6.2 Pre-registered test on data after September 2026
+
+On 2026-09-26, with data through 2026-09-25, the hypotheses, the scoring rule and a
+LightGBM model fitted on all 112 historical formation months were frozen and
+committed under the git tag `prereg-2026-09`, before any of the data that will test
+them existed. The protocol is in
+[preregistration/PREREGISTRATION.md](preregistration/PREREGISTRATION.md); the frozen
+files are identified by SHA-256, and the scoring code refuses a model file that does
+not match.
+
+| | |
+|---|---|
+| H1 | The Fama-MacBeth slope on limit-up days is negative (in-sample -1.18% a month) |
+| H2 | The slope on the one-month return is positive (in-sample +1.17% a month) |
+| Primary strategy | Signs, as in 6.1 |
+| Secondary strategy | The frozen LightGBM model (15 leaves, 100 trees) |
+| Data | Formation months from 2026-09. The August portfolio is excluded: it is held through September, part of which was observed at the freeze |
+| Decision | At 60 scored months (formation month 2031-08): supported if the mean slope has the predicted sign with a one-sided Newey-West t of 1.645 or more. A wrong sign is a rejection |
+| Interim looks | 12, 24 and 36 months, descriptive only, so looking cannot inflate the error rate |
+
+Each month is scored once its holding period has ended and appended to
+`results/oos_ledger.csv`, which is never rewritten: the universe is the listing at the
+time of scoring, and a later recomputation would silently lose stocks delisted in
+between.
+
+**Power.** The probability of meeting the criterion if the true effect equals the
+in-sample estimate:
+
+| Months of new data | H1 expected t | H1 power | H2 expected t | H2 power |
+|---|---|---|---|---|
+| 12 | 0.84 | 21% | 0.77 | 19% |
+| 24 | 1.19 | 33% | 1.08 | 29% |
+| 36 | 1.46 | 43% | 1.33 | 38% |
+| 60 | 1.89 | 60% | 1.71 | 53% |
+
+These are upper bounds. An effect estimated on the data it was found in is biased
+upward, and the limit-up count was defined after looking. Even five years of new
+data give the limit-up effect at best a 60% chance of confirmation, so a failure to
+confirm is weak evidence against it. A wrong sign is not.
+
+**Status.** No month scored. The first out-of-sample portfolio is formed at the close
+of 2026-09-30 and becomes scorable in early November 2026.
+
+## 7. Interpretation
 
 Supported by the data:
 
@@ -371,7 +483,7 @@ or ownership data. The one-month continuation has the same problem: delayed pric
 discovery across several limit days, herding and slow information diffusion all
 predict it.
 
-## 7. Limitations
+## 8. Limitations
 
 - **Survivorship.** Current listing only (section 2).
 - **Equal weights.** Without a history of shares outstanding there is no market
@@ -385,27 +497,32 @@ predict it.
   examined. Two results are significant in the joint regression and keep their sign
   and size in each half: the one-month continuation and the limit-up count. The
   one-month return was a pre-specified signal. The limit-up count was added after
-  seeing how MAX behaves on HOSE, which is a reason to test it again on data it has
-  not seen.
+  seeing how MAX behaves on HOSE, which is why it is tested again on data it has not
+  seen (6.2).
 
-## 8. Reproduction
+## 9. Reproduction
 
 ```
 pip install -r requirements.txt
 python -m factors.ingest        # downloads everything into data/, about 10 minutes
 python -m factors.trend         # every table in section 4
 python -m factors.volatility    # every table in section 5
+python -m factors.walkforward   # section 6.1
+python -m factors.score         # section 6.2: scores new months, appends to the ledger
 python -m pytest -q
 ```
 
 `factors.ingest` always performs a full refresh. Adjusted prices are restated
 backwards whenever a stock pays a stock dividend, so appending new days to old
-history would splice two adjustment bases together.
+history would splice two adjustment bases together. The in-sample studies stop at
+2026-09-25 whatever the download holds; only `factors.score` reads past it.
 
-## 9. Next
+`factors.freeze` produced the files in `preregistration/` and refuses to run again.
+Running `factors.score` once a month, after the first session, keeps the ledger
+current.
 
-- **Out-of-sample validation.** Fix the specification on data up to a cut-off, then
-  test it once on the years after. The limit-up result is the first candidate.
+## 10. Next
+
 - **Liquidity family.** Amihud illiquidity, the high-low spread estimator
   (Corwin-Schultz), turnover and size. The spread estimator needs only prices; the
   others need a history of shares outstanding and an unadjusted value series.
@@ -413,7 +530,7 @@ history would splice two adjustment bases together.
   form of any of these is a long-only portfolio hedged with VN30 index futures; the
   cost of that hedge is modelled in the companion repository on VN30 futures.
 
-## 10. Repository
+## 11. Repository
 
 ```
 factors/
@@ -427,10 +544,19 @@ factors/
   sorts.py        holding-period returns, quintile assignment, portfolios, costs
   stats.py        Newey-West means, CAPM regressions, Fama-MacBeth
   report.py       tables shared by the studies
+  cross_section.py  the six characteristic ranks and next-month returns
   trend.py        section 4
   volatility.py   section 5
+  walkforward.py  section 6.1: splits; linear, signs and LightGBM models
+  freeze.py       section 6.2: the one-time freeze (already run)
+  score.py        section 6.2: monthly out-of-sample scoring
+preregistration/
+  PREREGISTRATION.md  hypotheses, decision rule, power
+  frozen.json         frozen specification, in-sample estimates, data hash
+  lgbm_15l_100t.txt   the frozen LightGBM model
 tests/
   test_factors.py no look-ahead at entry, momentum skip month, out-of-band rule
                   across trading gaps, unfinished periods, costs, Dimson beta on a
-                  lagged response, CAPM and Fama-MacBeth estimators
+                  lagged response, CAPM and Fama-MacBeth estimators, purged splits,
+                  scoring only after the freeze, an append-only ledger
 ```

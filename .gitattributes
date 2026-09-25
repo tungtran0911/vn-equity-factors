@@ -1,0 +1,3 @@
+# Frozen artefacts are verified by hash: git must never convert their line endings.
+preregistration/** -text
+results/** -text
