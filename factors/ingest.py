@@ -16,16 +16,25 @@ from datetime import date
 
 import pandas as pd
 
-from factors.config import DAILY, DATA, HISTORY_START, PROFILES, UNIVERSE
+from factors.config import DAILY, DATA, HISTORY_START, MARKET, PROFILES, UNIVERSE
 from factors.kbs import Kbs
+
+
+def market(kbs: Kbs, end: str) -> None:
+    """VN-Index daily bars: the market factor for beta and idiosyncratic volatility."""
+    idx = kbs.index_bars("VNINDEX", HISTORY_START, end)
+    idx.to_parquet(MARKET, index=False)
+    print(f"wrote {MARKET.name}: {len(idx):,} sessions, "
+          f"{idx['date'].min().date()} to {idx['date'].max().date()}")
 
 
 def run() -> int:
     DATA.mkdir(parents=True, exist_ok=True)
     kbs = Kbs()
-    symbols = kbs.hose_symbols()
     today = date.today()
     end = today.strftime("%d-%m-%Y")
+    market(kbs, end)
+    symbols = kbs.hose_symbols()
     print(f"{len(symbols)} HOSE symbols, {HISTORY_START} to {end}")
 
     frames, profiles, failed = [], [], []

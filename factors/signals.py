@@ -36,7 +36,7 @@ def period_ends(calendar: pd.DatetimeIndex, freq: str) -> pd.DatetimeIndex:
     return ends
 
 
-def _eligible(panel: Panel, formation: pd.DatetimeIndex,
+def eligibility(panel: Panel, formation: pd.DatetimeIndex,
               window_start: pd.DatetimeIndex) -> pd.DataFrame:
     """Eligibility for each formation date, given where its signal window starts."""
     pos = panel.calendar.get_indexer
@@ -66,15 +66,15 @@ def trend_signals(panel: Panel) -> dict[str, tuple[pd.DataFrame, pd.DataFrame]]:
     f = m[12:]
     mom = pd.DataFrame(c.loc[m[11:-1]].to_numpy() / c.loc[m[:-12]].to_numpy() - 1,
                        index=f, columns=c.columns)
-    out["momentum_12_1"] = (mom, _eligible(panel, f, m[:-12]))
+    out["momentum_12_1"] = (mom, eligibility(panel, f, m[:-12]))
 
     f = m[1:]
     rev_m = pd.DataFrame(c.loc[m[1:]].to_numpy() / c.loc[m[:-1]].to_numpy() - 1,
                          index=f, columns=c.columns)
-    out["reversal_1m"] = (rev_m, _eligible(panel, f, m[:-1]))
+    out["reversal_1m"] = (rev_m, eligibility(panel, f, m[:-1]))
 
     f = w[1:]
     rev_w = pd.DataFrame(c.loc[w[1:]].to_numpy() / c.loc[w[:-1]].to_numpy() - 1,
                          index=f, columns=c.columns)
-    out["reversal_1w"] = (rev_w, _eligible(panel, f, w[:-1]))
+    out["reversal_1w"] = (rev_w, eligibility(panel, f, w[:-1]))
     return out

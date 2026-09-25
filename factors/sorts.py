@@ -25,29 +25,59 @@ from factors.panel import Panel
 N_QUANTILES = 5
 
 
-def quintile_backtest(panel: Panel, signal: pd.DataFrame, eligible: pd.DataFrame,
-                      skip: int = 1) -> pd.DataFrame:
-    """One row per holding period: quintile returns Q1..Q5, the universe, and the
-    one-way turnover of each quintile. Q1 holds the lowest signal values."""
+def holding_returns(panel: Panel, formation: pd.DatetimeIndex,
+                    skip: int = 1) -> pd.DataFrame:
+    """Return of every stock over each holding period, indexed by formation date.
+
+    The period formed at f runs from the close `skip` sessions after f to the
+    close `skip` sessions after the next formation date. The last formation date
+    has no successor and gets no row. Sorts and regressions both use this, so
+    they are scored on exactly the same returns.
+    """
     pos = panel.calendar.get_indexer
-    formation = signal.index
-    rows, previous = [], {}
+    rows = {}
     for f, f_next in zip(formation[:-1], formation[1:]):
         i_in, i_out = pos([f])[0] + skip, pos([f_next])[0] + skip
         if i_out >= len(panel.calendar):
             break
-        entry, exit_ = panel.calendar[i_in], panel.calendar[i_out]
+        rows[f] = (panel.close_ffill.iloc[i_out] / panel.close_ffill.iloc[i_in] - 1)
+    return pd.DataFrame(rows).T
+
+
+def quintile_labels(hold: pd.DataFrame, signal: pd.DataFrame,
+                    eligible: pd.DataFrame) -> pd.DataFrame:
+    """Quintile (1..5) of each held stock at each formation date, NaN if not held.
+
+    A stock is held when it is eligible, has a signal and has a holding-period
+    return. Ties are broken by rank order so every quintile has the same size.
+    """
+    out = {}
+    for f in hold.index:
         s = signal.loc[f][eligible.loc[f]].dropna()
-        p_in = panel.close_ffill.loc[entry, s.index]
-        p_out = panel.close_ffill.loc[exit_, s.index]
-        r = (p_out / p_in - 1).dropna()
-        s = s.loc[r.index]
+        s = s.loc[hold.loc[f, s.index].dropna().index]
         if len(s) < N_QUANTILES * 5:
             continue
-        q = pd.qcut(s.rank(method="first"), N_QUANTILES,
-                    labels=range(1, N_QUANTILES + 1))
+        out[f] = pd.qcut(s.rank(method="first"), N_QUANTILES,
+                         labels=range(1, N_QUANTILES + 1)).astype(int)
+    return pd.DataFrame(out).T
+
+
+def quintile_backtest(panel: Panel, signal: pd.DataFrame, eligible: pd.DataFrame,
+                      skip: int = 1) -> pd.DataFrame:
+    """One row per holding period: quintile returns Q1..Q5, the universe, and the
+    one-way turnover of each quintile. Q1 holds the lowest signal values."""
+    hold = holding_returns(panel, signal.index, skip)
+    labels = quintile_labels(hold, signal, eligible)
+    pos = panel.calendar.get_indexer
+    rows, previous = [], {}
+    for f in labels.index:
+        entry = panel.calendar[pos([f])[0] + skip]
+        exit_ = panel.calendar[pos([signal.index[signal.index.get_loc(f) + 1]])[0]
+                               + skip]
+        q = labels.loc[f].dropna()
+        r = hold.loc[f, q.index]
         row = {"formation": f, "entry": entry, "exit": exit_,
-               "n": len(s), "universe": r.mean()}
+               "n": len(q), "universe": r.mean()}
         for k in range(1, N_QUANTILES + 1):
             names = set(q.index[q == k])
             row[f"Q{k}"] = r.loc[list(names)].mean()

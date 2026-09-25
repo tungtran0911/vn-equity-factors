@@ -80,8 +80,15 @@ class Kbs:
                 "shares_outstanding_now": d.get("KLCPLH")}
 
     def daily_bars(self, symbol: str, start: str, end: str) -> pd.DataFrame:
-        """Adjusted daily OHLC and unadjusted volume. Dates are DD-MM-YYYY."""
-        data = self._get(f"{BASE}/stocks/{symbol}/data_day",
+        """Adjusted daily OHLC and volume for a stock. Dates are DD-MM-YYYY."""
+        return self._bars("stocks", symbol, start, end)
+
+    def index_bars(self, code: str, start: str, end: str) -> pd.DataFrame:
+        """Daily OHLC for an index, e.g. VNINDEX (a price index, no dividends)."""
+        return self._bars("index", code, start, end)
+
+    def _bars(self, root: str, symbol: str, start: str, end: str) -> pd.DataFrame:
+        data = self._get(f"{BASE}/{root}/{symbol}/data_day",
                          params={"sdate": start, "edate": end})
         rows = data.get("data_day", []) if isinstance(data, dict) else []
         if not rows:
@@ -92,5 +99,8 @@ class Kbs:
         # Stamps arrive as "YYYY-MM-DD 07:00". Only the calendar date is meaningful;
         # comparing the raw stamp against midnight silently picks the prior session.
         df["date"] = pd.to_datetime(df["date"]).dt.normalize()
+        # The index endpoint mixes strings and numbers within a column.
+        for col in ("open", "high", "low", "close", "volume"):
+            df[col] = pd.to_numeric(df[col], errors="coerce")
         df["symbol"] = symbol
         return df[["symbol", "date", "open", "high", "low", "close", "volume"]]
