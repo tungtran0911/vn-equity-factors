@@ -81,3 +81,39 @@ def test_newey_west_reduces_to_plain_t_without_lags():
     mean, t = newey_west(x, lags=0)
     assert mean == pytest.approx(2.5)
     assert t == pytest.approx(2.5 / np.sqrt(1.25 / 4))
+
+
+def test_dimson_beta_recovers_a_one_day_lagged_response():
+    """A thinly traded stock that absorbs market news a day late has a same-day
+    beta near zero and a Dimson beta near one."""
+    from factors.risk import risk_signals
+    rng = np.random.default_rng(0)
+    dates = pd.bdate_range("2024-01-01", periods=320)
+    market = pd.Series(rng.normal(0, 0.01, len(dates)), index=dates)
+    stock = (1 + market.shift(1).fillna(0)).cumprod() * 100
+    p = build(stock.to_frame("A"), min_stocks=1)
+    rs = risk_signals(p, market=market)
+    assert abs(rs["beta_ols"][0]["A"].iloc[-1]) < 0.15
+    assert rs["beta_dimson"][0]["A"].iloc[-1] == pytest.approx(1.0, abs=0.05)
+
+
+def test_capm_regression_recovers_alpha_and_beta():
+    from factors.stats import capm_nw
+    rng = np.random.default_rng(1)
+    x = pd.Series(rng.normal(0.01, 0.05, 200))
+    y = 0.004 + 1.5 * x + rng.normal(0, 0.001, 200)
+    alpha, t, beta = capm_nw(y, x)
+    assert alpha == pytest.approx(0.004, abs=0.0005)
+    assert beta == pytest.approx(1.5, abs=0.01)
+    assert t > 10
+
+
+def test_fama_macbeth_recovers_the_cross_sectional_slope():
+    from factors.stats import fama_macbeth
+    rng = np.random.default_rng(2)
+    dates = pd.date_range("2020-01-31", periods=24, freq="ME")
+    x = pd.DataFrame(rng.uniform(0, 1, (24, 100)), index=dates)
+    y = 2.0 * x + rng.normal(0, 0.1, (24, 100))
+    slopes = fama_macbeth(y, {"x": x})
+    assert len(slopes) == 24
+    assert slopes["x"].mean() == pytest.approx(2.0, abs=0.02)
