@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Downloaded market data: rebuilt by `python -m factors.ingest`.
+data/
